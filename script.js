@@ -21,6 +21,51 @@ class LineEquation {
         ctx.stroke();
         ctx.restore();
     }
+    /**
+     *
+     * @param {number} x
+     * @returns {number}
+     */
+    getYByX(x) {
+        return this.m * x + this.c;
+    }
+    /**
+     *
+     * @param {Position} pointA
+     * @param {Position} pointB
+     * @returns {LineEquation}
+     */
+    static getEquationByPoints(pointA, pointB) {
+        pointA = { ...pointA };
+        pointB = { ...pointB };
+        if (pointA.x == pointB.x) pointA.x += 0.00000001;
+        let m = (pointB.y - pointA.y) / (pointB.x - pointA.x);
+        let c = pointA.y - m * pointA.x;
+        return new LineEquation(m, c);
+    }
+    /**
+     *
+     * @param {LineEquation} lineB
+     * @param {LineEquation} lineA
+     * @returns {boolean}
+     */
+    static IsParallel(lineA, lineB) {
+        return lineA.m === lineB.m;
+    }
+    /**
+     *
+     * @param {LineEquation} lineA
+     * @param {LineEquation} lineB
+     * @returns {Position}
+     */
+    static getIntersectionPoint(lineA, lineB) {
+        if (LineEquation.IsParallel(lineA, lineB)) return null;
+        let x = (lineB.c - lineA.c) / (lineA.m - lineB.m);
+        let y = lineA.getYByX(x);
+        x = parseInt(x.toFixed(0));
+        y = parseInt(y.toFixed(0));
+        return new Position(x, y);
+    }
 }
 class Position {
     /**
@@ -31,6 +76,27 @@ class Position {
     constructor(x, y) {
         this.x = x;
         this.y = y;
+    }
+    /**@param {CanvasRenderingContext2D} ctx  */
+    draw(ctx) {
+        ctx.save();
+        ctx.fillStyle = "cyan";
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, 5, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.closePath();
+        ctx.restore();
+    }
+    /**
+     *
+     * @param {Position} pointA
+     * @param {Position} pointB
+     * @returns
+     */
+    static getDistance(pointA, pointB) {
+        return Math.sqrt(
+            Math.pow(pointB.x - pointA.x, 2) + Math.pow(pointB.y - pointA.y, 2)
+        );
     }
 }
 class Velocity {
@@ -84,9 +150,18 @@ class Ball {
             this.position.x + this.velocity.getSpeedX(),
             this.position.y + this.velocity.getSpeedY()
         );
-        let mx = (pointB.y - pointA.y) / (pointB.x - pointA.x);
-        let c = pointA.y - mx * pointA.x;
-        return new LineEquation(mx, c);
+        return LineEquation.getEquationByPoints(pointA, pointB);
+    }
+    /**@param {Position} position  */
+    setPosition(position) {
+        this.position = position;
+    }
+    /**@param {number} x
+     * @param {number} y
+     */
+    setPosition(x, y) {
+        this.position.x = x;
+        this.position.y = y;
     }
 }
 
@@ -103,6 +178,107 @@ class Box {
         ctx.fillRect(this.position.x, this.position.y, this.width, this.height);
         ctx.restore();
     }
+    /**@returns {Position[]} */
+    getBoundaries() {
+        return [
+            this.position,
+            new Position(
+                this.position.x + this.width,
+                this.position.y + this.height
+            ),
+        ];
+    }
+    /**@returns {LineEquation[]} */
+    getBoundariesEquations() {
+        let top = LineEquation.getEquationByPoints(
+            ...this.getTopBoundaryPoints()
+        );
+        let right = LineEquation.getEquationByPoints(
+            ...this.getRightBoundaryPoints()
+        );
+        let bottom = LineEquation.getEquationByPoints(
+            ...this.getBottomBoundaryPoints()
+        );
+        let left = LineEquation.getEquationByPoints(
+            ...this.getleftBoundaryPoints()
+        );
+        return [top, right, bottom, left];
+    }
+    /**@returns {Position[]} */
+    getleftBoundaryPoints() {
+        let PointA = this.position;
+        let PointB = new Position(
+            this.position.x,
+            this.position.y + this.height
+        );
+        return [PointA, PointB];
+    }
+    /**@returns {Position[]} */
+    getRightBoundaryPoints() {
+        let PointA = new Position(
+            this.position.x + this.width,
+            this.position.y
+        );
+        let PointB = new Position(
+            this.position.x + this.width,
+            this.position.y + this.height
+        );
+        return [PointA, PointB];
+    }
+    /**@returns {Position[]} */
+    getTopBoundaryPoints() {
+        let PointA = this.position;
+        let PointB = new Position(
+            this.position.x + this.width,
+            this.position.y
+        );
+        return [PointA, PointB];
+    }
+    /**@returns {Position[]} */
+    getBottomBoundaryPoints() {
+        let PointA = new Position(
+            this.position.x,
+            this.position.y + this.height
+        );
+        let PointB = new Position(
+            this.position.x + this.width,
+            this.position.y + this.height
+        );
+        return [PointA, PointB];
+    }
+    /**
+     *
+     * @param {Ball} ball
+     * @returns {Position}
+     */
+    getLinearIntersectionPointWithBall(ball) {
+        let line = ball.getEquation();
+        let intersection = null;
+        let boundaries = this.getBoundaries();
+        this.getBoundariesEquations().forEach((eq) => {
+            let point = LineEquation.getIntersectionPoint(line, eq);
+            if (point == null) return;
+            {
+                if (point.x < boundaries[0].x || point.x > boundaries[1].x) {
+                    return;
+                }
+                if (point.y < boundaries[0].y || point.y > boundaries[1].y) {
+                    return;
+                }
+            }
+            if (intersection == null) {
+                intersection = point;
+                return;
+            }
+            if (
+                Position.getDistance(ball.position, point) <
+                Position.getDistance(ball.position, intersection)
+            ) {
+                intersection = point;
+            }
+        });
+        return intersection;
+    }
 }
 
 /**@type {HTMLCanvasElement} */
@@ -113,16 +289,22 @@ const ctx = canvas.getContext("2d");
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
-const ball = new Ball(new Position(100, 100), new Velocity(10, 45), 5);
-
+const ball = new Ball(new Position(125, 79), new Velocity(10, -40), 5);
 const box = new Box(new Position(200, 200), 100, 100);
 
+window.addEventListener("mousemove", (event) => {});
+
+ball.draw(ctx);
+box.draw(ctx);
+ball.getEquation().draw(ctx, canvas);
+box.getLinearIntersectionPointWithBall(ball);
 function animate() {
     window.requestAnimationFrame(animate);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ball.draw(ctx);
     box.draw(ctx);
     ball.getEquation().draw(ctx, canvas);
+    box.getLinearIntersectionPointWithBall(ball);
 }
 
 animate();
