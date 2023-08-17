@@ -1,0 +1,19 @@
+*,
+*::after,
+*::before {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font: inherit;
+}
+img,
+video,
+svg {
+    width: 100%;
+    display: block;
+}
+
+#canvas {
+    background-color: gray;
+    display: block;
+}
