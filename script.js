@@ -66,6 +66,11 @@ class LineEquation {
         y = parseInt(y.toFixed(0));
         return new Position(x, y);
     }
+    static getLineIntersectionAngle(lineA, lineB) {
+        if (!lineA || !lineB) return null;
+        let angle = Math.atan((lineA.m - lineB.m) / (1 + lineA.m * lineB.m));
+        return parseInt(((angle * 180) / Math.PI).toFixed(0));
+    }
 }
 class Position {
     /**
@@ -107,7 +112,7 @@ class Velocity {
      */
     constructor(module, angle) {
         this.module = module;
-        this.angle = -angle % 360;
+        this.angle = angle % 360;
         this.angle = this.angle < 0 ? 360 + this.angle : this.angle;
         this.angle = angle == 90 ? 89.999999999 : this.angle;
         this.angle = angle == 270 ? 269.999999999 : this.angle;
@@ -119,6 +124,18 @@ class Velocity {
     /**@returns {number} */
     getSpeedY() {
         return this.module * Math.sin((this.angle / 180) * Math.PI);
+    }
+    draw(ctx, position) {
+        ctx.save();
+        ctx.strokeStyle = "red";
+        ctx.beginPath();
+        ctx.moveTo(position.x, position.y);
+        ctx.lineTo(
+            position.x + this.getSpeedX(),
+            position.y + this.getSpeedY()
+        );
+        ctx.stroke();
+        ctx.restore();
     }
 }
 class Ball {
@@ -156,7 +173,8 @@ class Ball {
     setPosition(position) {
         this.position = position;
     }
-    /**@param {number} x
+    /**
+     * @param {number} x
      * @param {number} y
      */
     setPosition(x, y) {
@@ -249,13 +267,15 @@ class Box {
     /**
      *
      * @param {Ball} ball
-     * @returns {Position}
+     * @returns {Object}
      */
     getLinearIntersectionPointWithBall(ball) {
         let line = ball.getEquation();
         let intersection = null;
+        let intersectionLine = null;
+        let Distance = null;
         let boundaries = this.getBoundaries();
-        this.getBoundariesEquations().forEach((eq) => {
+        this.getBoundariesEquations().forEach((eq, i) => {
             let point = LineEquation.getIntersectionPoint(line, eq);
             if (point == null) return;
             {
@@ -266,18 +286,21 @@ class Box {
                     return;
                 }
             }
-            if (intersection == null) {
-                intersection = point;
-                return;
-            }
             if (
+                intersection == null ||
                 Position.getDistance(ball.position, point) <
-                Position.getDistance(ball.position, intersection)
+                    Position.getDistance(ball.position, intersection)
             ) {
+                intersectionLine = eq;
                 intersection = point;
+                Distance = Position.getDistance(ball.position, point);
             }
         });
-        return intersection;
+        return {
+            intersection: intersection,
+            intersectionLine: intersectionLine,
+            Distance: Distance,
+        };
     }
 }
 
@@ -289,22 +312,47 @@ const ctx = canvas.getContext("2d");
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
-const ball = new Ball(new Position(125, 79), new Velocity(10, -40), 5);
+const ball = new Ball(new Position(300, 150), new Velocity(10, 150), 5);
 const box = new Box(new Position(200, 200), 100, 100);
 
 window.addEventListener("mousemove", (event) => {});
 
-ball.draw(ctx);
-box.draw(ctx);
-ball.getEquation().draw(ctx, canvas);
-box.getLinearIntersectionPointWithBall(ball);
 function animate() {
-    window.requestAnimationFrame(animate);
+    // window.requestAnimationFrame(animate);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ball.draw(ctx);
     box.draw(ctx);
+    let intersection = box.getLinearIntersectionPointWithBall(ball);
     ball.getEquation().draw(ctx, canvas);
-    box.getLinearIntersectionPointWithBall(ball);
+    intersection.intersectionLine?.draw(ctx, canvas);
+    let neweq;
+    if (ball.position.y < intersection.intersection.y) {
+        neweq = new Velocity(
+            ball.velocity.module + 100,
+            -LineEquation.getLineIntersectionAngle(
+                ball.getEquation(),
+                intersection.intersectionLine
+            ) + 180
+        );
+        console.log("ciao");
+        neweq.draw(ctx, intersection.intersection);
+    }
+    let v = new Velocity(
+        ball.velocity.module,
+        -LineEquation.getLineIntersectionAngle(
+            ball.getEquation(),
+            intersection.intersectionLine
+        )
+    );
+    ball.position.x += ball.velocity.getSpeedX();
+    ball.position.y += ball.velocity.getSpeedY();
+    if (
+        Position.getDistance(ball.position, intersection.intersection) <
+        ball.radius
+    ) {
+        ball.velocity = v;
+    }
+    v.draw(ctx, intersection.intersection);
 }
 
 animate();
